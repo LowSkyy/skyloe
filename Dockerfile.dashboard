@@ -6,6 +6,7 @@ COPY . .
 
 RUN npm ci
 RUN npm run db:generate
+RUN npm run build -w packages/db
 RUN npm run build -w apps/dashboard
 
 ENV NODE_ENV=production

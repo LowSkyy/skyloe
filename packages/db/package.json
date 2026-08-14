@@ -2,13 +2,14 @@
   "name": "@skyle/db",
   "version": "0.1.0",
   "private": true,
-  "main": "src/client.ts",
-  "types": "src/client.ts",
+  "main": "dist/client.js",
+  "types": "dist/client.d.ts",
   "scripts": {
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
-    "studio": "prisma studio"
+    "studio": "prisma studio",
+    "build": "tsc && cp -r src/generated dist/generated"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3"
