@@ -1,0 +1,31 @@
+{
+  "name": "skyle",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:bot": "npm run dev -w apps/bot",
+    "dev:dashboard": "npm run dev -w apps/dashboard",
+    "build:bot": "npm run build -w apps/bot",
+    "build:dashboard": "npm run build -w apps/dashboard",
+    "deploy:commands": "npm run deploy:commands -w apps/bot",
+    "db:generate": "npm run generate -w packages/db",
+    "db:migrate": "npm run migrate -w packages/db",
+    "db:studio": "npm run studio -w packages/db"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "prisma@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "sharp@0.34.5": true,
+    "ffmpeg-static@5.3.0": true,
+    "yt-dlp-exec@1.0.2": true
+  }
+}

@@ -1,0 +1,310 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard auth (NextAuth PrismaAdapter — login via Discord OAuth)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  discordId     String?   @unique
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Guilds the bot is in — synced by the bot on guildCreate/guildDelete so the
+// dashboard knows which servers to show without talking to the bot directly.
+// ---------------------------------------------------------------------------
+
+model BotGuild {
+  guildId   String    @id
+  name      String
+  icon      String?
+  ownerId   String?
+  addedAt   DateTime  @default(now())
+  removedAt DateTime?
+}
+
+// ---------------------------------------------------------------------------
+// Per-guild configuration — one GuildConfig row per Discord server, with
+// optional 1:1 sub-configs per feature category shown in the dashboard.
+// ---------------------------------------------------------------------------
+
+model GuildConfig {
+  guildId              String   @id
+  locale               String   @default("it")
+  modLogChannelId      String?
+  automodLogChannelId  String?
+  antiraidLogChannelId String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  automodRule      AutomodRule?
+  antiraidSettings AntiraidSettings?
+  welcomeConfig    WelcomeConfig?
+  levelConfig      LevelConfig?
+  ticketConfig     TicketConfig?
+  giveawayConfig   GiveawayConfig?
+  musicSettings    MusicSettings?
+  cases            ModerationCase[]
+  warns            Warn[]
+  reactionRoles    ReactionRoleConfig[]
+  giveaways        Giveaway[]
+}
+
+// --- Moderazione ------------------------------------------------------------
+
+enum ModerationCaseType {
+  BAN
+  KICK
+  TIMEOUT
+  WARN
+  UNBAN
+  UNTIMEOUT
+}
+
+model ModerationCase {
+  id          String             @id @default(cuid())
+  guildId     String
+  guild       GuildConfig        @relation(fields: [guildId], references: [guildId])
+  caseNumber  Int
+  type        ModerationCaseType
+  targetId    String
+  targetTag   String
+  moderatorId String
+  reason      String?
+  duration    Int?
+  createdAt   DateTime           @default(now())
+
+  @@unique([guildId, caseNumber])
+  @@index([guildId, targetId])
+}
+
+model Warn {
+  id          String      @id @default(cuid())
+  guildId     String
+  guild       GuildConfig @relation(fields: [guildId], references: [guildId])
+  userId      String
+  moderatorId String
+  reason      String?
+  caseNumber  Int
+  createdAt   DateTime    @default(now())
+
+  @@index([guildId, userId])
+}
+
+// --- Automod ------------------------------------------------------------
+
+enum AutomodAction {
+  DELETE
+  WARN
+  TIMEOUT
+}
+
+model AutomodRule {
+  guildId               String        @id
+  guild                 GuildConfig   @relation(fields: [guildId], references: [guildId])
+  enabled               Boolean       @default(false)
+  bannedWords           String[]
+  blockInvites          Boolean       @default(false)
+  allowedInviteCodes    String[]
+  maxMentions           Int           @default(5)
+  maxCapsPercent        Int           @default(70)
+  minLengthForCaps      Int           @default(10)
+  action                AutomodAction @default(DELETE)
+  timeoutMinutes         Int          @default(10)
+  exemptRoleIds          String[]
+  exemptChannelIds       String[]
+  updatedAt               DateTime    @updatedAt
+}
+
+// --- Anti-raid ------------------------------------------------------------
+
+enum AntiraidAction {
+  KICK
+  BAN
+  NONE
+}
+
+model AntiraidSettings {
+  guildId               String         @id
+  guild                 GuildConfig    @relation(fields: [guildId], references: [guildId])
+  enabled                Boolean       @default(false)
+  joinThreshold           Int          @default(10)
+  joinWindowSeconds       Int          @default(30)
+  minAccountAgeMinutes    Int          @default(30)
+  action                  AntiraidAction @default(KICK)
+  autoLockdown            Boolean      @default(true)
+  lockdownMinutes         Int          @default(15)
+  updatedAt               DateTime     @updatedAt
+}
+
+// --- Community / engagement (Fase 2 — schema pronto, non ancora usato) -----
+
+model LevelConfig {
+  guildId           String      @id
+  guild             GuildConfig @relation(fields: [guildId], references: [guildId])
+  enabled           Boolean     @default(false)
+  xpPerMessage      Int         @default(15)
+  xpCooldownSeconds Int         @default(60)
+  levelUpChannelId  String?
+  announceLevelUp   Boolean     @default(true)
+  updatedAt         DateTime    @updatedAt
+}
+
+model UserLevel {
+  id        String   @id @default(cuid())
+  guildId   String
+  userId    String
+  xp        Int      @default(0)
+  level     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([guildId, userId])
+}
+
+model WelcomeConfig {
+  guildId         String      @id
+  guild           GuildConfig @relation(fields: [guildId], references: [guildId])
+  enabled         Boolean     @default(false)
+  channelId       String?
+  messageTemplate String      @default("Benvenuto/a {user} su {server}! 🎉")
+  dmEnabled       Boolean     @default(false)
+  dmTemplate      String?
+  leaveEnabled    Boolean     @default(false)
+  leaveChannelId  String?
+  leaveTemplate   String      @default("{user} ha lasciato il server.")
+  updatedAt       DateTime    @updatedAt
+}
+
+model ReactionRoleConfig {
+  id        String      @id @default(cuid())
+  guildId   String
+  guild     GuildConfig @relation(fields: [guildId], references: [guildId])
+  messageId String
+  channelId String
+  emoji     String
+  roleId    String
+  createdAt DateTime    @default(now())
+
+  @@unique([messageId, emoji])
+}
+
+enum TicketStatus {
+  OPEN
+  CLAIMED
+  CLOSED
+}
+
+model TicketConfig {
+  guildId             String      @id
+  guild               GuildConfig @relation(fields: [guildId], references: [guildId])
+  enabled             Boolean     @default(false)
+  categoryId          String?
+  supportRoleIds      String[]
+  panelChannelId      String?
+  panelMessageId      String?
+  transcriptChannelId String?
+  updatedAt           DateTime    @updatedAt
+
+  tickets Ticket[]
+}
+
+model Ticket {
+  id           String       @id @default(cuid())
+  guildId      String
+  ticketConfig TicketConfig @relation(fields: [guildId], references: [guildId])
+  channelId    String
+  openerId     String
+  claimedById  String?
+  status       TicketStatus @default(OPEN)
+  createdAt    DateTime     @default(now())
+  closedAt     DateTime?
+
+  @@index([guildId, status])
+}
+
+model GiveawayConfig {
+  guildId          String      @id
+  guild            GuildConfig @relation(fields: [guildId], references: [guildId])
+  defaultChannelId String?
+  updatedAt        DateTime    @updatedAt
+}
+
+model Giveaway {
+  id          String      @id @default(cuid())
+  guildId     String
+  guild       GuildConfig @relation(fields: [guildId], references: [guildId])
+  channelId   String
+  messageId   String?
+  prize       String
+  winnerCount Int         @default(1)
+  hostId      String
+  endsAt      DateTime
+  ended       Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+
+  @@index([guildId, ended])
+}
+
+// --- Musica (Fase 3 — schema pronto, non ancora usato) ---------------------
+
+model MusicSettings {
+  guildId          String      @id
+  guild            GuildConfig @relation(fields: [guildId], references: [guildId])
+  djRoleIds        String[]
+  defaultVolume    Int         @default(80)
+  stay247          Boolean     @default(false)
+  stay247ChannelId String?
+  maxQueueSize     Int         @default(200)
+  updatedAt        DateTime    @updatedAt
+}
