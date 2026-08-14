@@ -16,3 +16,4 @@ apps/bot/dist/
 apps/dashboard/.next/
 apps/dashboard/next-env.d.ts
 packages/db/src/generated/
+*.tsbuildinfo

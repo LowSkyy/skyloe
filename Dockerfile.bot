@@ -1,0 +1,15 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+# yt-dlp (usato per la riproduzione musicale) richiede Python
+RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY . .
+
+RUN npm ci
+RUN npm run db:generate
+RUN npm run build -w apps/bot
+
+CMD ["npm", "run", "start", "-w", "apps/bot"]
